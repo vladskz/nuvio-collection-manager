@@ -255,7 +255,7 @@ app.get('/api/config', (req, res) => {
 const PORT = process.env.PORT || 4123;
 app.listen(PORT, () => {
   accountsStore.ensureDirs();
-  console.log(`Nuvio Account Manager running at http://localhost:${PORT}`);
+  console.log(`Nuvio Collection Manager running at http://localhost:${PORT}`);
 });
 
 process.on('SIGINT', async () => {

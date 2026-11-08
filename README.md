@@ -1,4 +1,4 @@
-# Nuvio Account Manager
+# Nuvio Collection Manager
 
 A local web dashboard that makes it easy to:
 

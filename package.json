@@ -1,5 +1,5 @@
 {
-  "name": "nuvio-account-manager",
+  "name": "nuvio-collection-manager",
   "version": "1.0.0",
   "description": "Local dashboard to switch between Nuvio accounts and bulk-import catalogs",
   "main": "server.js",
