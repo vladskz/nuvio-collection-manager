@@ -1,0 +1,28 @@
+{
+  "urls": {
+    "login": "https://nuvio.tv/account/login",
+    "account": "https://nuvio.tv/account?tab=overview",
+    "collections": "https://nuvio.tv/account?tab=collections"
+  },
+  "login": {
+    "emailSelector": "input[type=email]",
+    "passwordSelector": "input[type=password]",
+    "submitSelector": "button[type=submit]",
+    "loggedInLocalStorageKey": "nuvio.supabase.session",
+    "loggedInUrlContains": "/account?tab=",
+    "postLoginWaitMs": 4000
+  },
+  "profile": {
+    "switchSelector": "button.nv-profile-trigger",
+    "itemSelector": "button.nv-profile-option",
+    "activeNameSelector": ".nv-profile-trigger-name"
+  },
+  "import": {
+    "importButtonSelector": "button.btn-outline:has-text('Import')",
+    "fileInputSelector": "input[type=file][accept*='json']",
+    "confirmButtonSelector": null,
+    "successSelector": null,
+    "perFileWaitMs": 6000,
+    "headless": false
+  }
+}

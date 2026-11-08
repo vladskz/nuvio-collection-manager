@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Nuvio Account Manager</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar">
+      <div class="brand">
+        <span class="brand-mark">N</span>
+        <span class="brand-name">Nuvio <em>Manager</em></span>
+      </div>
+
+      <nav class="side-nav">
+        <p class="nav-group">General</p>
+        <button class="nav-item active" data-tab="overview">Overview</button>
+
+        <p class="nav-group">Sync Data</p>
+        <button class="nav-item" data-tab="catalogs">Catalogs</button>
+        <button class="nav-item" data-tab="import">Bulk import</button>
+      </nav>
+
+      <div class="sidebar-foot">
+        <span class="dot"></span> Running locally
+      </div>
+    </aside>
+
+    <div class="content">
+      <header class="topbar">
+        <h1 id="page-title">Overview</h1>
+        <div id="status" class="status"></div>
+      </header>
+
+      <main class="main">
+        <section class="panel active" id="panel-overview">
+          <h2 class="panel-title">Accounts</h2>
+          <p class="panel-sub">One browser profile per account — sign in once, switch instantly.</p>
+
+          <form id="account-form" class="row" autocomplete="off">
+            <input type="text" id="acc-name" name="account-name" autocomplete="off" placeholder="Account name (e.g. Client A)" required />
+            <input type="email" id="acc-email" name="email" autocomplete="email" placeholder="Email" required />
+            <input type="password" id="acc-password" name="password" autocomplete="new-password" placeholder="Password" required />
+            <button type="submit" class="primary">Add account</button>
+          </form>
+          <div id="accounts-list" class="list"></div>
+        </section>
+
+        <section class="panel" id="panel-catalogs">
+          <h2 class="panel-title">Catalogs</h2>
+          <p class="panel-sub">Upload the JSON catalog files you want to import into profiles.</p>
+
+          <div class="row">
+            <input type="file" id="catalog-files" accept=".json" multiple />
+            <button id="upload-btn">Upload selected files</button>
+          </div>
+          <div id="catalogs-list" class="list"></div>
+        </section>
+
+        <section class="panel" id="panel-import">
+          <h2 class="panel-title">Bulk import</h2>
+          <p class="panel-sub">For each profile, pick the catalog JSON file to import into it.</p>
+
+          <div id="import-accounts" class="list"></div>
+          <button id="run-import-btn" class="primary">Run import</button>
+
+          <pre id="log" class="log"></pre>
+        </section>
+      </main>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
