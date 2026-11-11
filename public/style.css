@@ -191,6 +191,8 @@ button.primary:hover { background: var(--accent-hover); }
 button.danger { color: var(--danger); }
 button.danger:hover { background: rgba(248, 113, 113, .1); }
 button.small { padding: 4px 8px; font-size: 12px; }
+button.warn { color: #fbbf24; }
+button.warn:hover { background: rgba(251, 191, 36, .1); }
 
 /* ---------- lists ---------- */
 .list { display: flex; flex-direction: column; gap: 10px; margin-top: 16px; }
@@ -257,8 +259,8 @@ button.small { padding: 4px 8px; font-size: 12px; }
   gap: 8px;
 }
 .sub-title { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
-.profile-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
-.profile-label { font-size: 14px; }
+.profile-row { display: flex; align-items: center; gap: 10px; }
+.profile-label { font-size: 14px; flex: 1; min-width: 0; }
 
 .rename-input {
   padding: 4px 8px;

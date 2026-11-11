@@ -5,7 +5,7 @@ const path = require('path');
 
 const accountsStore = require('./src/accounts');
 const { getContext, closeContext, closeAll } = require('./src/browser');
-const { runBulkImport, fetchProfileNames } = require('./src/importer');
+const { runBulkImport, fetchProfileNames, clearProfileCollections, createProfileInNuvio } = require('./src/importer');
 
 accountsStore.ensureDirs();
 
@@ -95,12 +95,21 @@ app.delete('/api/accounts/:id', async (req, res) => {
 });
 
 // ---------- profiles ----------
-app.post('/api/accounts/:id/profiles', (req, res) => {
+app.post('/api/accounts/:id/profiles', async (req, res) => {
   const data = accountsStore.loadAccounts();
   const account = data.accounts.find((a) => a.id === req.params.id);
   if (!account) return res.status(404).json({ error: 'not found' });
   const { name } = req.body || {};
   if (!name) return res.status(400).json({ error: 'name is required' });
+  if (account.profiles.length >= 6) {
+    return res.status(400).json({ error: 'Profile limit reached (Nuvio allows 6 profiles per account).' });
+  }
+  const config = loadConfig();
+  try {
+    await createProfileInNuvio(account, name, config);
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
   const profile = { id: accountsStore.newProfileId(), name };
   account.profiles.push(profile);
   accountsStore.saveAccounts(data);
@@ -128,6 +137,23 @@ app.delete('/api/accounts/:id/profiles/:profileId', (req, res) => {
   account.profiles.splice(idx, 1);
   accountsStore.saveAccounts(data);
   res.json({ ok: true });
+});
+
+// ---------- clear a profile's collections in Nuvio ----------
+app.post('/api/accounts/:accountId/profiles/:profileId/clear-collections', async (req, res) => {
+  const data = accountsStore.loadAccounts();
+  const account = data.accounts.find((a) => a.id === req.params.accountId);
+  if (!account) return res.status(404).json({ error: 'account not found' });
+  const profile = account.profiles.find((p) => p.id === req.params.profileId);
+  if (!profile) return res.status(404).json({ error: 'profile not found' });
+
+  const config = loadConfig();
+  try {
+    await clearProfileCollections(account, profile, config);
+    res.json({ ok: true, profile: profile.name });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // ---------- sync profiles from Nuvio ----------

@@ -118,6 +118,104 @@ async function fetchProfileNames(account, config, log = () => {}) {
 }
 
 /**
+ * Delete each collection in the active profile one by one.
+ * "Delete all" in Nuvio clears every profile, so we delete collections individually.
+ */
+async function clearProfileCollections(account, profile, config, log = () => {}) {
+  const imp = config.import || {};
+  const headless = imp.headless === true;
+  const context = await getContext(account.id, { headless });
+  const page = await context.newPage();
+  try {
+    await ensureLoggedIn(page, account, config, log);
+    await switchProfile(page, profile, config, log);
+
+    const cc = config.clearCollections || {};
+    const delSel = cc.deleteCollectionButtonSelector || `article button:has-text("Delete")`;
+    const confirmSel = cc.confirmButtonSelector || 'button.nu-button-danger';
+
+    let deleted = 0;
+    for (let i = 0; i < 200; i++) {
+      const del = page.locator(delSel).first();
+      const n = await del.count().catch(() => 0);
+      if (!n) break;
+      await del.click().catch(() => {});
+      await page.waitForTimeout(600);
+      const confirm = page.locator(confirmSel).first();
+      if (await confirm.count().catch(() => 0)) {
+        await confirm.click().catch(() => {});
+        deleted += 1;
+      }
+      await page.waitForTimeout(900);
+    }
+    log(`  deleted ${deleted} collection(s) for profile "${profile.name}"`);
+    return 'ok';
+  } finally {
+    await page.close().catch(() => {});
+    await closeContext(account.id);
+  }
+}
+
+/**
+ * Create a new profile in Nuvio with the given name and a random avatar.
+ * Requires the primary profile to be active (the Add Profile button only shows there).
+ */
+async function createProfileInNuvio(account, profileName, config, log = () => {}) {
+  const imp = config.import || {};
+  const headless = imp.headless === true;
+  const context = await getContext(account.id, { headless });
+  const page = await context.newPage();
+  try {
+    await ensureLoggedIn(page, account, config, log);
+
+    const pc = config.profile || {};
+    const switchSel = pc.switchSelector || 'button.nv-profile-trigger';
+    const itemSel = pc.itemSelector || 'button.nv-profile-option';
+
+    // Switch to the primary profile (first entry in the profile menu).
+    await page.click(switchSel).catch(() => {});
+    await page.waitForTimeout(600);
+    const firstProfile = page.locator(itemSel).first();
+    if (await firstProfile.count().catch(() => 0)) {
+      await firstProfile.click().catch(() => {});
+      await page.waitForTimeout(2000);
+    }
+
+    // Go to the Profiles tab.
+    const accountUrl = (config.urls.account || 'https://nuvio.tv/account').split('?')[0];
+    await page.goto(`${accountUrl}?tab=profiles`, { waitUntil: 'domcontentloaded' });
+    await page.waitForTimeout(2000);
+
+    const cp = config.createProfile || {};
+    await page.click(cp.addButtonSelector || 'button:has-text("Add Profile")').catch(() => {});
+    await page.waitForTimeout(1000);
+
+    await page.fill(cp.nameInputSelector || '[role="dialog"] input[type=text]', profileName).catch(() => {});
+
+    // Pick a random avatar (skips "Use initials").
+    const avatars = page.locator(cp.avatarSelector || '[role="dialog"] button.group');
+    const count = await avatars.count().catch(() => 0);
+    if (count > 0) {
+      await avatars.nth(Math.floor(Math.random() * count)).click().catch(() => {});
+      await page.waitForTimeout(300);
+    }
+
+    await page.click(cp.createButtonSelector || '[role="dialog"] button.btn-primary').catch(() => {});
+    await page.waitForTimeout(2500);
+
+    const stillOpen = await page.locator('[role="dialog"]').count().catch(() => 0);
+    if (stillOpen > 0) {
+      throw new Error('Profile creation failed (dialog did not close — name may be taken or the 6-profile limit reached).');
+    }
+    log(`  created profile "${profileName}"`);
+    return 'ok';
+  } finally {
+    await page.close().catch(() => {});
+    await closeContext(account.id);
+  }
+}
+
+/**
  * Switch to the given profile if the config knows how. Nuvio imports go into
  * whichever profile is currently active, so we must activate it first.
  */
@@ -168,7 +266,7 @@ async function chooseImportMode(page, config, log) {
 
   const target = imp.importModeSelector
     ? page.locator(imp.importModeSelector).filter({ hasText: label }).first()
-    : page.locator(`button:has-text("${label}"), [role=button]:has-text("${label}")`).first();
+    : page.locator(`[role="dialog"] button:has-text("${label}")`).first();
 
   try {
     await target.waitFor({ state: 'visible', timeout: 8000 });
@@ -177,8 +275,21 @@ async function chooseImportMode(page, config, log) {
     return false;
   }
   await target.click().catch(() => {});
-  await page.waitForTimeout(800);
+  await page.waitForTimeout(400);
   log(`  chose import mode: ${label}`);
+
+  // Confirm the import. The confirm button is the last button in the dialog
+  // ("Add collections" / "Merge collections" / "Overwrite collections").
+  const confirm = imp.confirmImportButtonSelector
+    ? page.locator(imp.confirmImportButtonSelector).first()
+    : page.locator('[role="dialog"] button').last();
+  if (await confirm.count().catch(() => 0)) {
+    await confirm.click().catch(() => {});
+    await page.waitForTimeout(1000);
+    log('  confirmed import');
+  } else {
+    log('  WARNING: import confirm button not found — import may not have been applied');
+  }
   return true;
 }
 
@@ -265,4 +376,4 @@ async function runBulkImport(assignments, config, progress) {
   return results;
 }
 
-module.exports = { runBulkImport, isLoggedIn, fetchProfileNames };
+module.exports = { runBulkImport, isLoggedIn, fetchProfileNames, clearProfileCollections, createProfileInNuvio };

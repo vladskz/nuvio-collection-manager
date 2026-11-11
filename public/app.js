@@ -93,11 +93,16 @@ function renderAccounts() {
       const label = document.createElement('span');
       label.className = 'profile-label';
       label.textContent = p.name;
+      const clearBtn = document.createElement('button');
+      clearBtn.className = 'warn small';
+      clearBtn.textContent = 'Clear collections';
+      clearBtn.onclick = () => clearProfileCollections(acc.id, p.id, p.name);
       const del = document.createElement('button');
       del.className = 'danger small';
       del.textContent = 'Delete';
       del.onclick = () => deleteProfile(acc.id, p.id);
       row.appendChild(label);
+      row.appendChild(clearBtn);
       row.appendChild(del);
       profBox.appendChild(row);
     }
@@ -264,18 +269,35 @@ async function deleteAccount(id) {
 
 async function addProfile(accountId, name) {
   if (!name.trim()) return setStatus('Profile name is required.', true);
-  await api(`/api/accounts/${accountId}/profiles`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name: name.trim() }),
-  });
-  await loadAccounts();
+  setStatus(`Creating profile "${name.trim()}" in Nuvio…`);
+  try {
+    await api(`/api/accounts/${accountId}/profiles`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: name.trim() }),
+    });
+    setStatus(`Created profile "${name.trim()}".`, 'success');
+    await loadAccounts();
+  } catch (e) {
+    setStatus('Error: ' + e.message, true);
+  }
 }
 
 async function deleteProfile(accountId, profileId) {
   if (!confirm('Delete this profile?')) return;
   await api(`/api/accounts/${accountId}/profiles/${profileId}`, { method: 'DELETE' });
   await loadAccounts();
+}
+
+async function clearProfileCollections(accountId, profileId, profileName) {
+  if (!confirm(`Delete ALL collections for profile "${profileName}" in Nuvio? This cannot be undone.`)) return;
+  setStatus(`Clearing collections for "${profileName}"…`);
+  try {
+    await api(`/api/accounts/${accountId}/profiles/${profileId}/clear-collections`, { method: 'POST' });
+    setStatus(`Cleared collections for "${profileName}".`, 'success');
+  } catch (e) {
+    setStatus('Error: ' + e.message, true);
+  }
 }
 
 document.getElementById('account-form').addEventListener('submit', async (e) => {

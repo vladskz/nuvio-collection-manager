@@ -22,9 +22,20 @@
     "fileInputSelector": "input[type=file][accept*='json']",
     "importMode": "overwrite",
     "importModeSelector": null,
+    "confirmImportButtonSelector": null,
     "confirmButtonSelector": null,
     "successSelector": null,
     "perFileWaitMs": 6000,
     "headless": false
+  },
+  "clearCollections": {
+    "deleteCollectionButtonSelector": "article button:has-text('Delete')",
+    "confirmButtonSelector": "button.nu-button-danger"
+  },
+  "createProfile": {
+    "addButtonSelector": "button:has-text('Add Profile')",
+    "nameInputSelector": "[role=\"dialog\"] input[type=text]",
+    "avatarSelector": "[role=\"dialog\"] button.group",
+    "createButtonSelector": "[role=\"dialog\"] button.btn-primary"
   }
 }
