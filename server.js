@@ -59,6 +59,19 @@ app.post('/api/accounts', (req, res) => {
   res.json(account);
 });
 
+// ---------- reorder accounts (must be before /:id so "order" isn't treated as an id) ----------
+app.put('/api/accounts/order', (req, res) => {
+  const { ids = [] } = req.body || {};
+  const data = accountsStore.loadAccounts();
+  if (!Array.isArray(ids) || ids.length !== data.accounts.length) {
+    return res.status(400).json({ error: 'Order must include all accounts' });
+  }
+  const byId = new Map(data.accounts.map((a) => [a.id, a]));
+  data.accounts = ids.map((id) => byId.get(id)).filter(Boolean);
+  accountsStore.saveAccounts(data);
+  res.json({ ok: true });
+});
+
 app.put('/api/accounts/:id', (req, res) => {
   const data = accountsStore.loadAccounts();
   const account = data.accounts.find((a) => a.id === req.params.id);
@@ -188,6 +201,14 @@ app.post('/api/catalogs', upload.array('files'), (req, res) => {
     return res.status(400).json({ error: 'No files uploaded' });
   }
   res.json({ ok: true, files: req.files.map((f) => f.filename) });
+});
+
+app.delete('/api/catalogs/:name', (req, res) => {
+  const name = path.basename(req.params.name);
+  const filePath = path.join(accountsStore.CATALOGS_DIR, name);
+  if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'file not found' });
+  fs.unlinkSync(filePath);
+  res.json({ ok: true, deleted: name });
 });
 
 // ---------- bulk import ----------

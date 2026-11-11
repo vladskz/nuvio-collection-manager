@@ -20,6 +20,8 @@
   "import": {
     "importButtonSelector": "button.btn-outline:has-text('Import')",
     "fileInputSelector": "input[type=file][accept*='json']",
+    "importMode": "overwrite",
+    "importModeSelector": null,
     "confirmButtonSelector": null,
     "successSelector": null,
     "perFileWaitMs": 6000,

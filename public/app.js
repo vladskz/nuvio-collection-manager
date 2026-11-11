@@ -3,6 +3,8 @@ const state = {
   catalogs: [],
   profileFile: {}, // profileId -> fileName
   polling: null,
+  collapsed: new Set(), // account ids that are collapsed
+  draggedId: null,
 };
 
 async function api(url, options = {}) {
@@ -24,33 +26,58 @@ function renderAccounts() {
   const list = document.getElementById('accounts-list');
   if (!state.accounts.length) {
     list.innerHTML = '<div class="hint">No accounts yet. Add your first account above.</div>';
+    updateCollapseAllButton();
     return;
   }
   list.innerHTML = '';
   for (const acc of state.accounts) {
+    const isCollapsed = state.collapsed.has(acc.id);
     const block = document.createElement('div');
-    block.className = 'account-block';
+    block.className = 'account-block' + (isCollapsed ? ' collapsed' : '');
+    block.dataset.id = acc.id;
+    block.draggable = true;
 
     const head = document.createElement('div');
-    head.className = 'item';
-    head.innerHTML = `
-      <div class="info">
-        <div class="name"></div>
-        <div class="sub"></div>
-      </div>
-      <button data-act="open">Open</button>
-      <button data-act="login">Sign in</button>
-      <button data-act="sync">Sync profiles</button>
-      <button data-act="rename">Rename</button>
-      <button data-act="delete" class="danger">Delete</button>
-    `;
-    head.querySelector('.name').textContent = acc.name;
-    head.querySelector('.sub').textContent = acc.email;
-    head.querySelector('[data-act="open"]').onclick = () => openAccount(acc.id);
-    head.querySelector('[data-act="login"]').onclick = () => loginAccount(acc.id);
-    head.querySelector('[data-act="sync"]').onclick = () => syncProfiles(acc.id);
-    head.querySelector('[data-act="rename"]').onclick = () => renameAccountInline(acc, head);
-    head.querySelector('[data-act="delete"]').onclick = () => deleteAccount(acc.id);
+    head.className = 'item account-head';
+
+    const collapseBtn = document.createElement('button');
+    collapseBtn.className = 'collapse-btn';
+    collapseBtn.title = isCollapsed ? 'Expand' : 'Collapse';
+    collapseBtn.textContent = isCollapsed ? '▸' : '▾';
+    collapseBtn.onclick = () => toggleCollapse(acc.id);
+    head.appendChild(collapseBtn);
+
+    const handle = document.createElement('span');
+    handle.className = 'drag-handle';
+    handle.title = 'Drag to reorder';
+    handle.textContent = '≡';
+    head.appendChild(handle);
+
+    const info = document.createElement('div');
+    info.className = 'info';
+    const nameEl = document.createElement('div');
+    nameEl.className = 'name';
+    nameEl.textContent = acc.name;
+    const subEl = document.createElement('div');
+    subEl.className = 'sub';
+    subEl.textContent = acc.email;
+    info.appendChild(nameEl);
+    info.appendChild(subEl);
+    head.appendChild(info);
+
+    const mk = (label, cls, handler) => {
+      const b = document.createElement('button');
+      b.textContent = label;
+      if (cls) b.className = cls;
+      b.onclick = handler;
+      return b;
+    };
+    head.appendChild(mk('Open', '', () => openAccount(acc.id)));
+    head.appendChild(mk('Sign in', '', () => loginAccount(acc.id)));
+    head.appendChild(mk('Sync profiles', '', () => syncProfiles(acc.id)));
+    head.appendChild(mk('Rename', '', () => renameAccountInline(acc, head)));
+    head.appendChild(mk('Delete', 'danger', () => deleteAccount(acc.id)));
+
     block.appendChild(head);
 
     const profBox = document.createElement('div');
@@ -88,7 +115,76 @@ function renderAccounts() {
     profBox.appendChild(addRow);
 
     block.appendChild(profBox);
+
+    block.addEventListener('dragstart', (e) => {
+      if (e.target.closest('button, input, select')) { e.preventDefault(); return; }
+      state.draggedId = acc.id;
+      block.classList.add('dragging');
+      e.dataTransfer.effectAllowed = 'move';
+      try { e.dataTransfer.setData('text/plain', acc.id); } catch (_) {}
+    });
+    block.addEventListener('dragend', () => {
+      state.draggedId = null;
+      block.classList.remove('dragging');
+    });
+    block.addEventListener('dragover', (e) => {
+      if (state.draggedId && state.draggedId !== acc.id) {
+        e.preventDefault();
+        block.classList.add('drag-over');
+      }
+    });
+    block.addEventListener('dragleave', () => block.classList.remove('drag-over'));
+    block.addEventListener('drop', (e) => {
+      e.preventDefault();
+      block.classList.remove('drag-over');
+      dropOn(acc.id);
+    });
+
     list.appendChild(block);
+  }
+  updateCollapseAllButton();
+}
+
+function toggleCollapse(id) {
+  if (state.collapsed.has(id)) state.collapsed.delete(id);
+  else state.collapsed.add(id);
+  localStorage.setItem('nuvio-collapsed-accounts', JSON.stringify([...state.collapsed]));
+  renderAccounts();
+}
+
+function toggleCollapseAll() {
+  const allCollapsed = state.accounts.length > 0 && state.accounts.every((a) => state.collapsed.has(a.id));
+  if (allCollapsed) state.collapsed.clear();
+  else for (const a of state.accounts) state.collapsed.add(a.id);
+  localStorage.setItem('nuvio-collapsed-accounts', JSON.stringify([...state.collapsed]));
+  renderAccounts();
+}
+
+function updateCollapseAllButton() {
+  const btn = document.getElementById('collapse-all-btn');
+  if (!btn) return;
+  const allCollapsed = state.accounts.length > 0 && state.accounts.every((a) => state.collapsed.has(a.id));
+  btn.textContent = allCollapsed ? 'Expand all' : 'Collapse all';
+}
+
+async function dropOn(targetId) {
+  const fromId = state.draggedId;
+  if (!fromId || fromId === targetId) return;
+  const from = state.accounts.findIndex((a) => a.id === fromId);
+  const to = state.accounts.findIndex((a) => a.id === targetId);
+  if (from === -1 || to === -1) return;
+  const [moved] = state.accounts.splice(from, 1);
+  state.accounts.splice(to, 0, moved);
+  state.draggedId = null;
+  renderAccounts();
+  try {
+    await api('/api/accounts/order', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ids: state.accounts.map((a) => a.id) }),
+    });
+  } catch (e) {
+    setStatus('Error saving order: ' + e.message, true);
   }
 }
 
@@ -96,7 +192,7 @@ async function openAccount(id) {
   setStatus(`Opening account…`);
   try {
     const r = await api(`/api/accounts/${id}/open`, { method: 'POST' });
-    setStatus(r.note || 'Opened.');
+    setStatus(r.note || 'Opened.', 'success');
   } catch (e) {
     setStatus('Error: ' + e.message, true);
   }
@@ -106,7 +202,7 @@ async function loginAccount(id) {
   setStatus(`Opening sign-in page…`);
   try {
     const r = await api(`/api/accounts/${id}/login`, { method: 'POST' });
-    setStatus(r.note || 'Sign in opened.');
+    setStatus(r.note || 'Sign in opened.', 'success');
   } catch (e) {
     setStatus('Error: ' + e.message, true);
   }
@@ -116,7 +212,7 @@ async function syncProfiles(id) {
   setStatus('Fetching profiles from Nuvio…');
   try {
     const r = await api(`/api/accounts/${id}/fetch-profiles`, { method: 'POST' });
-    setStatus(r.added.length ? `Added ${r.added.length} profile(s): ${r.added.join(', ')}` : 'No new profiles found.');
+    setStatus(r.added.length ? `Added ${r.added.length} profile(s): ${r.added.join(', ')}` : 'No new profiles found.', 'success');
     await loadAccounts();
   } catch (e) {
     setStatus('Error: ' + e.message, true);
@@ -195,6 +291,7 @@ document.getElementById('account-form').addEventListener('submit', async (e) => 
   });
   e.target.reset();
   await loadAccounts();
+  setStatus('Account added.', 'success');
   // Auto-pull the account's profiles from Nuvio right after adding it.
   syncProfiles(account.id);
 });
@@ -217,9 +314,27 @@ function renderCatalogs() {
   for (const f of state.catalogs) {
     const div = document.createElement('div');
     div.className = 'item';
-    div.innerHTML = `<div class="info"><div class="name"></div></div>`;
+    div.innerHTML = `
+      <div class="info"><div class="name"></div></div>
+      <button data-act="del" class="danger small">Delete</button>
+    `;
     div.querySelector('.name').textContent = f.name;
+    div.querySelector('[data-act="del"]').onclick = () => deleteCatalog(f.name);
     list.appendChild(div);
+  }
+}
+
+async function deleteCatalog(name) {
+  if (!confirm(`Delete "${name}"?`)) return;
+  try {
+    await api(`/api/catalogs/${encodeURIComponent(name)}`, { method: 'DELETE' });
+    for (const [pid, fileName] of Object.entries(state.profileFile)) {
+      if (fileName === name) delete state.profileFile[pid];
+    }
+    setStatus(`Deleted ${name}.`, 'success');
+    await loadCatalogs();
+  } catch (e) {
+    setStatus('Error: ' + e.message, true);
   }
 }
 
@@ -235,7 +350,7 @@ document.getElementById('upload-btn').addEventListener('click', async () => {
   try {
     await api('/api/catalogs', { method: 'POST', body: form });
     input.value = '';
-    setStatus('Uploaded.');
+    setStatus('Uploaded.', 'success');
     await loadCatalogs();
   } catch (e) {
     setStatus('Upload error: ' + e.message, true);
@@ -329,7 +444,8 @@ function pollJob(jobId) {
       } else {
         clearInterval(state.polling);
         state.polling = null;
-        setStatus(job.status === 'done' ? 'Import finished.' : 'Import ended with an error.');
+        setStatus(job.status === 'done' ? 'Import finished.' : 'Import ended with an error.',
+          job.status === 'done' ? 'success' : 'error');
       }
     } catch (e) {
       clearInterval(state.polling);
@@ -340,21 +456,44 @@ function pollJob(jobId) {
 }
 
 // ---------- status / log helpers ----------
-function setStatus(msg, isError = false) {
+function setStatus(msg, type) {
   const el = document.getElementById('status');
   el.textContent = msg;
-  el.style.color = isError ? '#b91c1c' : '#1f2937';
+  if (type === true || type === 'error') {
+    el.style.color = '#f87171';
+    el.style.fontWeight = '600';
+  } else if (type === 'success') {
+    el.style.color = '#34d399';
+    el.style.fontWeight = '600';
+  } else {
+    el.style.color = 'var(--muted)';
+    el.style.fontWeight = '400';
+  }
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 
 function renderLog(logs) {
   const el = document.getElementById('log');
-  el.textContent = logs.map((l) => `${l.msg}`).join('\n');
+  el.innerHTML = logs.map((l) => {
+    const cls = /ERROR|FATAL|error|failed/i.test(l.msg)
+      ? 'log-error'
+      : /imported|finished|signed in|switched|chose|already on|collection set/i.test(l.msg)
+        ? 'log-ok'
+        : '';
+    return `<div class="${cls}">${escapeHtml(l.msg)}</div>`;
+  }).join('');
   el.scrollTop = el.scrollHeight;
 }
 
 function clearLog() {
   document.getElementById('log').textContent = '';
 }
+
+// ---------- collapse all button ----------
+document.getElementById('collapse-all-btn').addEventListener('click', toggleCollapseAll);
 
 // ---------- tab navigation ----------
 document.querySelectorAll('.nav-item').forEach((btn) => {
@@ -370,5 +509,8 @@ document.querySelectorAll('.nav-item').forEach((btn) => {
 
 // ---------- init ----------
 (async function init() {
+  try {
+    state.collapsed = new Set(JSON.parse(localStorage.getItem('nuvio-collapsed-accounts') || '[]'));
+  } catch (_) { /* ignore */ }
   await Promise.all([loadAccounts(), loadCatalogs()]);
 })();
